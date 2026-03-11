@@ -22,9 +22,9 @@ import org.opensearch.tsdb.core.index.live.LiveSeriesIndexLeafReader;
 import org.opensearch.tsdb.core.index.live.MemChunkReader;
 
 import java.io.IOException;
-import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
 import java.util.function.LongSupplier;
 import java.util.Map;
 import java.util.Set;
@@ -335,12 +335,27 @@ public class TSDBDirectoryReader extends DirectoryReader {
 
     @Override
     protected DirectoryReader doOpenIfChanged(IndexCommit indexCommit) throws IOException {
-        throw new UnsupportedEncodingException("TSDBDirectoryReader does not support opening with IndexCommit");
+        throw new UnsupportedOperationException("TSDBDirectoryReader does not support opening with IndexCommit");
+    }
+
+    @Override
+    protected DirectoryReader doOpenIfChanged(IndexCommit indexCommit, ExecutorService executor) throws IOException {
+        throw new UnsupportedOperationException("TSDBDirectoryReader does not support opening with IndexCommit");
     }
 
     @Override
     protected DirectoryReader doOpenIfChanged(IndexWriter indexWriter, boolean b) throws IOException {
-        throw new UnsupportedEncodingException("TSDBDirectoryReader does not support opening with IndexWriter");
+        throw new UnsupportedOperationException("TSDBDirectoryReader does not support opening with IndexWriter");
+    }
+
+    @Override
+    protected DirectoryReader doOpenIfChanged(IndexWriter indexWriter, boolean b, ExecutorService executor) throws IOException {
+        throw new UnsupportedOperationException("TSDBDirectoryReader does not support opening with IndexWriter");
+    }
+
+    @Override
+    protected DirectoryReader doOpenIfChanged(ExecutorService executor) throws IOException {
+        throw new UnsupportedOperationException("TSDBDirectoryReader does not support opening with ExecutorService");
     }
 
     @Override

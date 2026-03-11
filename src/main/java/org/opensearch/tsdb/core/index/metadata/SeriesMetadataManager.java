@@ -12,14 +12,13 @@ import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.SegmentInfos;
 import org.apache.lucene.index.SnapshotDeletionPolicy;
 import org.apache.lucene.store.Directory;
+import org.opensearch.tsdb.core.utils.KeyedRefCounter;
 
 import java.io.IOException;
+import java.util.HashSet;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantLock;
-import java.util.stream.Collectors;
 
 /**
  * Manages live series metadata files with snapshot protection and cleanup.
@@ -32,7 +31,7 @@ public class SeriesMetadataManager {
     private final Directory directory;
     private final IndexWriter indexWriter;
     private final SnapshotDeletionPolicy snapshotDeletionPolicy;
-    private final Map<IndexCommit, MetadataAwareIndexCommit> activeSnapshots;
+    private final KeyedRefCounter<IndexCommit> activeSnapshots;
     private final ReentrantLock metadataLock;
 
     /**
@@ -46,7 +45,7 @@ public class SeriesMetadataManager {
         this.directory = directory;
         this.indexWriter = indexWriter;
         this.snapshotDeletionPolicy = snapshotDeletionPolicy;
-        this.activeSnapshots = new ConcurrentHashMap<>();
+        this.activeSnapshots = new KeyedRefCounter<>();
         this.metadataLock = new ReentrantLock();
     }
 
@@ -122,7 +121,7 @@ public class SeriesMetadataManager {
         IndexCommit luceneCommit = snapshotDeletionPolicy.snapshot();
         String metadataFilename = extractMetadataFilename(luceneCommit);
         MetadataAwareIndexCommit wrappedCommit = new MetadataAwareIndexCommit(luceneCommit, metadataFilename);
-        activeSnapshots.put(luceneCommit, wrappedCommit);
+        activeSnapshots.acquire(luceneCommit);
         return wrappedCommit;
     }
 
@@ -134,7 +133,7 @@ public class SeriesMetadataManager {
      */
     public void release(IndexCommit snapshot) throws IOException {
         IndexCommit luceneCommit = extractLuceneCommit(snapshot);
-        activeSnapshots.remove(luceneCommit);
+        activeSnapshots.release(luceneCommit);
         snapshotDeletionPolicy.release(luceneCommit);
         indexWriter.deleteUnusedFiles();
         cleanupOldMetadataFiles();
@@ -185,12 +184,14 @@ public class SeriesMetadataManager {
                 }
             }
 
-            // Collect protected files (from active snapshots)
-            Set<String> protectedFiles = activeSnapshots.values()
-                .stream()
-                .map(MetadataAwareIndexCommit::getMetadataFilename)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toSet());
+            // Collect protected files (from active snapshots).
+            Set<String> protectedFiles = new HashSet<>();
+            for (IndexCommit commit : activeSnapshots.keys()) {
+                String filename = extractMetadataFilename(commit);
+                if (filename != null) {
+                    protectedFiles.add(filename);
+                }
+            }
 
             // Always protect current file if it exists
             if (currentMetadataFile != null) {
